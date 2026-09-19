@@ -13,6 +13,10 @@ async function start(){
   $('start').disabled=true;status('Preparing WebGPU…');
   try{
     screen=await GPUScreen.create($('screen'),$('boot'));
+    status('Checking Android image…');
+    const diskCheck=await fetch('https://i.copy.sh/android_x86_nonsse3_4.4r1_20140904/0-1048576.iso',{referrerPolicy:'no-referrer'});
+    if(!diskCheck.ok)throw Error(`Android image host returned HTTP ${diskCheck.status}. Please try again later.`);
+    if((await diskCheck.arrayBuffer()).byteLength!==1048576)throw Error('Android image download was incomplete. Please try again.');
     screen.device.addEventListener('uncapturederror',e=>fail(e.error));
     screen.device.lost.then(info=>{if(info.reason!=='destroyed')fail(Error('GPU connection lost. Reload to restart Android.'));});
     $('cover').hidden=true;diagnostic.state='booting';startedAt=performance.now();
