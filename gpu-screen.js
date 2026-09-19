@@ -1,5 +1,14 @@
 // Android's software-rendered RGBA framebuffer is uploaded directly to WebGPU.
 // No Canvas2D or WebGL path is used for graphical frames.
+export function clipLayer(l,width,height) {
+  let dx=l.screen_x,dy=l.screen_y,sx=l.buffer_x,sy=l.buffer_y,w=l.buffer_width,h=l.buffer_height;
+  // VGA scrolling can expose a layer with a negative destination origin.
+  // Canvas2D clips it implicitly; WebGPU requires a valid unsigned rectangle.
+  if(dx<0){sx-=dx;w+=dx;dx=0;}if(dy<0){sy-=dy;h+=dy;dy=0;}
+  if(sx<0){dx-=sx;w+=sx;sx=0;}if(sy<0){dy-=sy;h+=sy;sy=0;}
+  w=Math.min(w,width-dx,l.image_data.width-sx);h=Math.min(h,height-dy,l.image_data.height-sy);
+  return w>0&&h>0?{dx,dy,sx,sy,w,h}:null;
+}
 export class GPUScreen {
   constructor(canvas, boot, device, context, format) {
     Object.assign(this, {canvas, boot, device, context, format});
@@ -50,10 +59,9 @@ export class GPUScreen {
   }
   update_buffer(layers) {
     for (const l of layers) {
-      const w=Math.min(l.buffer_width,this.width-l.screen_x),h=Math.min(l.buffer_height,this.height-l.screen_y);
-      if (w<=0 || h<=0) continue;
-      this.device.queue.writeTexture({texture:this.texture,origin:[l.screen_x,l.screen_y]}, l.image_data.data,
-        {offset:(l.buffer_y*l.image_data.width+l.buffer_x)*4,bytesPerRow:l.image_data.width*4}, [w,h]);
+      const r=clipLayer(l,this.width,this.height);if(!r)continue;
+      this.device.queue.writeTexture({texture:this.texture,origin:[r.dx,r.dy]}, l.image_data.data,
+        {offset:(r.sy*l.image_data.width+r.sx)*4,bytesPerRow:l.image_data.width*4}, [r.w,r.h]);
     }
     if (!layers.length) return;
     const encoder=this.device.createCommandEncoder();

@@ -10,6 +10,7 @@ The emulator CPU is built from that revision's Rust and C source.
 
 Included components:
 
+- Rust standard library, the Rust Project Developers: [MIT license](rust-license.txt).
 - Berkeley SoftFloat 3e, Regents of the University of California:
   [license](softfloat-license.txt).
 - Zstandard decompressor, Yann Collet / Facebook:
