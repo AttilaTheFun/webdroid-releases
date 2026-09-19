@@ -25,8 +25,12 @@ async function start(){
     screen.fill=()=>emulator.v86?.cpu?.devices?.vga?.screen_fill_buffer();
     emulator.add_listener('emulator-ready',()=>{
       for(const id of ['back','home','keyboard','pause'])$(id).disabled=false;
+      // This image's ISOLINUX menu is graphical, so text-screen matching is insufficient.
+      // Match the known 640x480 boot menu; never keep sending Enter after Android starts.
       bootEnter=setInterval(()=>{
-        if(screen.get_text_screen().join('\n').includes('Live CD')){emulator.keyboard_send_scancodes([0x1c,0x9c]);clearInterval(bootEnter);}
+        if(screen.graphical && screen.width===640 && screen.height===480 && screen.frames>2){
+          emulator.keyboard_send_scancodes([0x1c,0x9c]);clearInterval(bootEnter);
+        }
       },1000);
     });
     setInterval(()=>{
@@ -35,7 +39,7 @@ async function start(){
       diagnostic.elapsedSeconds=Math.round((performance.now()-startedAt)/1000);
       diagnostic.instructions=cpu?.instruction_counter?.[0];
       diagnostic.bootText=screen.get_text_screen().join('\n');
-      if(screen.graphical&&screen.frames>5&&diagnostic.state==='booting'){diagnostic.state='running';status('Android display active');}
+      if(screen.graphical&&screen.width===800&&screen.frames>5&&diagnostic.state==='booting'){diagnostic.state='display-active';status('Android is starting…');}
       $('metrics').textContent=`${diagnostic.elapsedSeconds}s · ${screen.frames} frames · WebGPU`;
       $('diagnostics').textContent=JSON.stringify(diagnostic,null,2);
     },1000);
