@@ -2,7 +2,7 @@ import { V86 } from './v86.mjs';
 import { GPUScreen } from './gpu-screen.js';
 import { AndroidGuest } from './guest.js';
 const $=id=>document.getElementById(id);
-const diagnostic={version:'0.1.0',state:'idle',renderer:'webgpu',errors:[],userAgent:navigator.userAgent};
+const diagnostic={version:'0.1.1',state:'idle',renderer:'webgpu',errors:[],userAgent:navigator.userAgent};
 window.webdroid={diagnostic};
 function status(message){$('status').textContent=message;diagnostic.status=message;}
 function fail(error){diagnostic.errors.push(String(error?.stack||error));status(String(error.message||error));$('diagnostics').textContent=JSON.stringify(diagnostic,null,2);}

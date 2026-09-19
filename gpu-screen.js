@@ -32,7 +32,6 @@ export class GPUScreen {
     this.tick = () => {
       if (!this.paused) {
         this.fill?.();
-        if(this.graphical)this.present();
         if (this.textDirty && !this.graphical) { this.boot.textContent = this.get_text_screen().join('\n'); this.textDirty = false; }
       }
       this.raf = requestAnimationFrame(this.tick);
@@ -64,7 +63,7 @@ export class GPUScreen {
       this.device.queue.writeTexture({texture:this.texture,origin:[r.dx,r.dy]}, l.image_data.data,
         {offset:(r.sy*l.image_data.width+r.sx)*4,bytesPerRow:l.image_data.width*4}, [r.w,r.h]);
     }
-    if(layers.length)this.frames++;
+    if(layers.length){this.frames++;this.present();}
   }
   render(encoder,view) {
     const pass=encoder.beginRenderPass({colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
