@@ -1,5 +1,6 @@
 import { V86 } from './v86.mjs';
 import { GPUScreen } from './gpu-screen.js';
+import { AndroidGuest } from './guest.js';
 const $=id=>document.getElementById(id);
 const diagnostic={version:'0.1.0',state:'idle',renderer:'webgpu',errors:[],userAgent:navigator.userAgent};
 window.webdroid={diagnostic};
@@ -7,7 +8,7 @@ function status(message){$('status').textContent=message;diagnostic.status=messa
 function fail(error){diagnostic.errors.push(String(error?.stack||error));status(String(error.message||error));$('diagnostics').textContent=JSON.stringify(diagnostic,null,2);}
 addEventListener('error',e=>fail(e.error||e.message));
 addEventListener('unhandledrejection',e=>fail(e.reason));
-let emulator,screen,startedAt,bootEnter;
+let emulator,screen,guest,startedAt,bootEnter;
 async function start(){
   $('start').disabled=true;status('Preparing WebGPU…');
   try{
@@ -22,14 +23,20 @@ async function start(){
       screen_adapter:screen,disable_mouse:true,disable_keyboard:false,disable_speaker:true,autostart:true,acpi:false,
     });
     window.webdroid.emulator=emulator;window.webdroid.screen=screen;
+    guest=new AndroidGuest(emulator,()=>{
+      diagnostic.state='ready';status('Android is ready');
+      for(const id of ['back','home','keyboard','pause'])$(id).disabled=false;
+    });
+    window.webdroid.guest=guest;
     screen.fill=()=>emulator.v86?.cpu?.devices?.vga?.screen_fill_buffer();
     emulator.add_listener('emulator-ready',()=>{
-      for(const id of ['back','home','keyboard','pause'])$(id).disabled=false;
       // This image's ISOLINUX menu is graphical, so text-screen matching is insufficient.
       // Match the known 640x480 boot menu; never keep sending Enter after Android starts.
       bootEnter=setInterval(()=>{
         if(screen.graphical && screen.width===640 && screen.height===480 && screen.frames>2){
-          emulator.keyboard_send_scancodes([0x1c,0x9c]);clearInterval(bootEnter);
+          clearInterval(bootEnter);
+          emulator.keyboard_send_scancodes([0x0f,0x8f]);
+          setTimeout(()=>emulator.keyboard_send_text(' console=ttyS0 androidboot.console=ttyS0\n',5),500);
         }
       },1000);
     });
@@ -39,6 +46,7 @@ async function start(){
       diagnostic.elapsedSeconds=Math.round((performance.now()-startedAt)/1000);
       diagnostic.instructions=cpu?.instruction_counter?.[0];
       diagnostic.bootText=screen.get_text_screen().join('\n');
+      diagnostic.console=guest.output.slice(-1500);
       if(screen.graphical&&screen.width===800&&screen.frames>5&&diagnostic.state==='booting'){diagnostic.state='display-active';status('Android is starting…');}
       $('metrics').textContent=`${diagnostic.elapsedSeconds}s · ${screen.frames} frames · WebGPU`;
       $('diagnostics').textContent=JSON.stringify(diagnostic,null,2);
@@ -47,19 +55,22 @@ async function start(){
 }
 $('start').onclick=start;
 const key=c=>emulator?.keyboard_send_scancodes(c);
-$('back').onclick=()=>key([0x01,0x81]);
-$('home').onclick=()=>key([0xe0,0x5b,0xe0,0xdb]);
+$('back').onclick=()=>guest?.key(4);
+$('home').onclick=()=>guest?.key(3);
 $('keyboard').onclick=()=>{$('typing').hidden=!$('typing').hidden;if(!$('typing').hidden)$('text').focus();};
-$('send').onclick=()=>{emulator?.keyboard_send_text($('text').value);$('text').value='';};
-$('enter').onclick=()=>key([0x1c,0x9c]);$('delete').onclick=()=>key([0x0e,0x8e]);
+$('send').onclick=()=>{guest?.text($('text').value);$('text').value='';};
+$('enter').onclick=()=>guest?.key(66);$('delete').onclick=()=>guest?.key(67);
 $('text').onkeydown=e=>{if(e.key==='Enter'){$('send').click();$('enter').click();}};
 $('pause').onclick=async()=>{if(emulator.is_running()){await emulator.stop();$('pause').textContent='Resume';status('Paused');}else{emulator.run();$('pause').textContent='Pause';status('Android display active');}};
 $('fullscreen').onclick=()=>{const m=document.querySelector('.machine');if(m.requestFullscreen)m.requestFullscreen().catch(fail);else{m.scrollIntoView();status('Rotate your phone for a larger display');}};
 let pointer=null;
 function position(e){const r=$('screen').getBoundingClientRect();const scale=Math.min(r.width/screen.width,r.height/screen.height);const w=scale*screen.width,h=scale*screen.height;return[Math.max(0,Math.min(screen.width,(e.clientX-r.left-(r.width-w)/2)/scale)),Math.max(0,Math.min(screen.height,(e.clientY-r.top-(r.height-h)/2)/scale))];}
-function move(e){if(!emulator)return;const [x,y]=position(e);emulator.bus.send('mouse-absolute',[x,y,screen.width,screen.height]);if(pointer)emulator.bus.send('mouse-delta',[x-pointer.x,pointer.y-y]);pointer={x,y};}
-$('screen').onpointerdown=e=>{if(!emulator)return;e.preventDefault();$('screen').setPointerCapture(e.pointerId);pointer=null;move(e);emulator.bus.send('mouse-click',[true,false,false]);};
-$('screen').onpointermove=e=>{if(e.buttons||e.pointerType==='mouse')move(e);};
-function up(e){if(!emulator)return;emulator.bus.send('mouse-click',[false,false,false]);pointer=null;}
-$('screen').onpointerup=up;$('screen').onpointercancel=up;
+$('screen').onpointerdown=e=>{if(!guest?.ready)return;e.preventDefault();$('screen').setPointerCapture(e.pointerId);const[x,y]=position(e);pointer={x,y,time:performance.now(),id:e.pointerId};};
+$('screen').onpointerup=e=>{
+  if(!pointer||e.pointerId!==pointer.id)return;
+  const[x,y]=position(e),p=pointer;pointer=null;
+  const elapsed=performance.now()-p.time;
+  if(Math.hypot(x-p.x,y-p.y)>6||elapsed>500)guest.swipe(p.x,p.y,x,y,elapsed);else guest.tap(x,y);
+};
+$('screen').onpointercancel=()=>{pointer=null;};
 if(new URLSearchParams(location.search).has('autostart'))start();
