@@ -19,7 +19,7 @@ async function start(){
     emulator=new V86({wasm_path:'v86.wasm',memory_size:512*1024*1024,vga_memory_size:8*1024*1024,
       bios:{url:'bios/seabios.bin'},vga_bios:{url:'bios/vgabios.bin'},
       cdrom:{url:'https://i.copy.sh/android_x86_nonsse3_4.4r1_20140904/.iso',size:247463936,async:true,fixed_chunk_size:1048576,use_parts:true},
-      screen_adapter:screen,disable_mouse:true,disable_keyboard:true,disable_speaker:true,autostart:true,acpi:false,
+      screen_adapter:screen,disable_mouse:true,disable_keyboard:false,disable_speaker:true,autostart:true,acpi:false,
     });
     window.webdroid.emulator=emulator;window.webdroid.screen=screen;
     screen.fill=()=>emulator.v86?.cpu?.devices?.vga?.screen_fill_buffer();
