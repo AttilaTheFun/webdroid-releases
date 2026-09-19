@@ -32,6 +32,7 @@ export class GPUScreen {
     this.tick = () => {
       if (!this.paused) {
         this.fill?.();
+        if(this.graphical)this.present();
         if (this.textDirty && !this.graphical) { this.boot.textContent = this.get_text_screen().join('\n'); this.textDirty = false; }
       }
       this.raf = requestAnimationFrame(this.tick);
@@ -63,11 +64,31 @@ export class GPUScreen {
       this.device.queue.writeTexture({texture:this.texture,origin:[r.dx,r.dy]}, l.image_data.data,
         {offset:(r.sy*l.image_data.width+r.sx)*4,bytesPerRow:l.image_data.width*4}, [r.w,r.h]);
     }
-    if (!layers.length) return;
-    const encoder=this.device.createCommandEncoder();
-    const pass=encoder.beginRenderPass({colorAttachments:[{view:this.context.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
+    if(layers.length)this.frames++;
+  }
+  render(encoder,view) {
+    const pass=encoder.beginRenderPass({colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
     pass.setPipeline(this.pipeline);pass.setBindGroup(0,this.bind);pass.draw(3);pass.end();
-    this.device.queue.submit([encoder.finish()]); this.frames++;
+  }
+  present() {
+    const encoder=this.device.createCommandEncoder();
+    this.render(encoder,this.context.getCurrentTexture().createView());
+    this.device.queue.submit([encoder.finish()]);
+  }
+  async capture() {
+    // Render through the same shader into a readable target. Headless browser
+    // screenshots do not reliably retain WebGPU swapchain contents.
+    const texture=this.device.createTexture({size:[this.width,this.height],format:this.format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+    const stride=Math.ceil(this.width*4/256)*256;
+    const buffer=this.device.createBuffer({size:stride*this.height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    const encoder=this.device.createCommandEncoder();this.render(encoder,texture.createView());
+    encoder.copyTextureToBuffer({texture},{buffer,bytesPerRow:stride},[this.width,this.height]);
+    this.device.queue.submit([encoder.finish()]);await buffer.mapAsync(GPUMapMode.READ);
+    const source=new Uint8Array(buffer.getMappedRange()),pixels=new Uint8Array(this.width*this.height*4);
+    for(let y=0;y<this.height;y++)pixels.set(source.subarray(y*stride,y*stride+this.width*4),y*this.width*4);
+    if(this.format==='bgra8unorm')for(let i=0;i<pixels.length;i+=4){const r=pixels[i];pixels[i]=pixels[i+2];pixels[i+2]=r;}
+    buffer.unmap();buffer.destroy();texture.destroy();
+    return{width:this.width,height:this.height,pixels};
   }
   set_size_text(cols,rows) {this.cols=cols;this.rows=rows;this.text=Array(cols*rows).fill(' ');this.textDirty=true;}
   put_char(row,col,chr) {this.text[row*this.cols+col]=chr>=32&&chr<127?String.fromCharCode(chr):' ';this.textDirty=true;}
