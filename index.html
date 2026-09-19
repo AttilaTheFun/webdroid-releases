@@ -5,20 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#10151f">
 <title>Webdroid — Android in your browser</title>
-<link rel="stylesheet" href="style.css?v=0.1.2">
+<link rel="stylesheet" href="style.css?v=0.1.3">
 <main>
   <header><a href="./" class="brand">web<span>droid</span></a><span class="badge">ANDROID · ON DEVICE</span></header>
   <section class="intro"><h1>A little Android.<br>Right here in Safari.</h1><p>Android 4.4 running locally through WebAssembly, with a WebGPU display. No account. No remote computer.</p></section>
   <section class="machine" aria-label="Android emulator">
     <div class="machine-bar"><span id="status" role="status">Ready to start</span><span id="metrics">WebAssembly + WebGPU</span></div>
-    <div id="display"><canvas id="screen" width="800" height="600" tabindex="0" aria-label="Android screen"></canvas><pre id="boot" aria-label="Boot messages"></pre><div id="cover"><div class="android-mark">ᴡ</div><h2 id="cover-title">Your browser is the computer.</h2><p id="startup-message" aria-live="polite">First boot can take several minutes.<br>Keep this tab open while it starts.</p><button id="start" class="primary" disabled>Loading controls…</button><noscript>Enable JavaScript in Safari to run Android.</noscript></div></div>
+    <div id="display"><canvas id="screen" width="480" height="960" tabindex="0" aria-label="Android screen"></canvas><pre id="boot" aria-label="Boot messages"></pre><div id="cover"><div class="android-mark">ᴡ</div><h2 id="cover-title">Your browser is the computer.</h2><p id="startup-message" aria-live="polite">First boot can take several minutes.<br>Keep this tab open while it starts.</p><button id="start" class="primary" disabled>Loading controls…</button><noscript>Enable JavaScript in Safari to run Android.</noscript></div></div>
     <nav aria-label="Android controls"><button id="back" disabled>← Back</button><button id="home" disabled>⌂ Home</button><button id="keyboard" disabled>Keyboard</button><button id="pause" disabled>Pause</button><button id="fullscreen">Expand</button></nav>
     <div id="typing" hidden><input id="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type text for Android" aria-label="Text to send to Android"><button id="send">Send</button><button id="enter">Enter</button><button id="delete">⌫</button></div>
   </section>
-  <p id="help">Safari 26+ on iPhone or iPad, or a browser with WebGPU. Tap to click; drag to swipe. Landscape gives you more room.</p>
+  <p id="help">Safari 26+ on iPhone or iPad, or a browser with WebGPU. Tap to click; drag to swipe. Portrait display with direct touch input.</p>
   <details><summary>About this preview</summary><p>This is a real Android-x86 4.4 guest, powered by v86. It supports older x86-compatible Android apps, not current ARM-only apps. Android renders in software inside the guest; WebGPU presents its framebuffer. Sessions currently reset when the page reloads. Internet inside Android and Google Play are not configured.</p><p>Boot can take several minutes, especially on mobile. Webdroid runs only while the tab is active.</p><p><a href="https://github.com/AttilaTheFun/webdroid-releases">Releases & notices</a> · <a href="licenses/v86.txt">v86 license</a> · <a href="licenses/seabios.txt">SeaBIOS license</a></p></details>
   <details><summary>Diagnostics</summary><pre id="diagnostics"></pre></details>
-  <footer>Built for the open web. <span id="version">Webdroid preview 0.1.2</span></footer>
+  <footer>Built for the open web. <span id="version">Webdroid preview 0.1.3</span></footer>
 </main>
-<script src="bootstrap.js?v=0.1.2" onerror="document.getElementById('startup-message').textContent='The controls could not download. Reload this page to retry.'"></script>
+<script src="bootstrap.js?v=0.1.3" onerror="document.getElementById('startup-message').textContent='The controls could not download. Reload this page to retry.'"></script>
 </html>

@@ -2,7 +2,7 @@
 // remain visible even when that module cannot load or evaluate.
 (() => {
   const $ = id => document.getElementById(id);
-  const diagnostic = {version:'0.1.2',state:'idle',renderer:'webgpu',errors:[],userAgent:navigator.userAgent};
+  const diagnostic = {version:'0.1.3',state:'idle',renderer:'webgpu',errors:[],userAgent:navigator.userAgent};
   let busy = false;
   const status = message => {
     diagnostic.status = message;
@@ -42,7 +42,7 @@
     $('cover-title').textContent = 'Starting Android';
     status('Loading emulator…');
     try {
-      const app = await deadline(import('./app.js?v=0.1.2'),30000,'The emulator could not download. Check your connection and retry.');
+      const app = await deadline(import('./app.js?v=0.1.3'),30000,'The emulator could not download. Check your connection and retry.');
       await app.start();
     } catch(error) { fail(error); }
   };

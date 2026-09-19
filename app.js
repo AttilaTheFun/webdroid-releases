@@ -1,9 +1,10 @@
-import { V86 } from './v86.mjs';
-import { GPUScreen } from './gpu-screen.js?v=0.1.2';
-import { AndroidGuest } from './guest.js';
+import { V86, AsyncXHRPartfileBuffer } from './v86.mjs?v=0.1.3';
+import { configureBootDisk } from './boot-disk.js?v=0.1.3';
+import { GPUScreen } from './gpu-screen.js?v=0.1.3';
+import { AndroidGuest } from './guest.js?v=0.1.3';
 const $=id=>document.getElementById(id);
 const {diagnostic,status,fail,deadline}=window.webdroid;
-let emulator,screen,guest,startedAt,bootEnter,resourceTimer;
+let emulator,screen,guest,startedAt,resourceTimer;
 export async function start(){
   $('start').disabled=true;status('Preparing WebGPU…');
   try{
@@ -20,11 +21,12 @@ export async function start(){
       })(),30000,'The Android image download stalled. Check your connection and retry.');
     }finally{abort.abort();}
     if(diagnostic.state==='error')return;
+    const touchBinary=await deadline(fetch('./touch.bin').then(r=>{if(!r.ok)throw Error('Touch driver download failed');return r.arrayBuffer();}).then(b=>new Uint8Array(b)),30000,'Touch driver download stalled. Reload and retry.');
     diagnostic.state='booting';startedAt=performance.now();
     status('Loading emulator files…');
     emulator=new V86({wasm_path:'v86.wasm',memory_size:512*1024*1024,vga_memory_size:8*1024*1024,
-      bios:{url:'bios/seabios.bin'},vga_bios:{url:'bios/vgabios.bin'},
-      cdrom:{url:'https://i.copy.sh/android_x86_nonsse3_4.4r1_20140904/.iso',size:247463936,async:true,fixed_chunk_size:1048576,use_parts:true},
+      bios:{url:'bios/seabios.bin'},vga_bios:{url:'bios/vgabios.bin?v=0.1.3'},
+      cdrom:configureBootDisk(new AsyncXHRPartfileBuffer('https://i.copy.sh/android_x86_nonsse3_4.4r1_20140904/.iso',247463936,1048576)),
       screen_adapter:screen,disable_mouse:true,disable_keyboard:false,disable_speaker:true,autostart:true,acpi:false,
     });
     window.webdroid.emulator=emulator;window.webdroid.screen=screen;
@@ -39,23 +41,13 @@ export async function start(){
       if(diagnostic.state==='error')return;
       diagnostic.state='ready';status('Android is ready');
       for(const id of ['back','home','keyboard','pause'])$(id).disabled=false;
-    });
+    },touchBinary);
     window.webdroid.guest=guest;
     screen.fill=()=>emulator.v86?.cpu?.devices?.vga?.screen_fill_buffer();
     emulator.add_listener('emulator-ready',()=>{
       clearTimeout(resourceTimer);
       if(diagnostic.state==='error'){emulator.stop();return;}
       $('cover').hidden=true;status('Booting Android…');
-      // This image's ISOLINUX menu is graphical, so text-screen matching is insufficient.
-      // Match the known 640x480 boot menu; never keep sending Enter after Android starts.
-      bootEnter=setInterval(()=>{
-        if(diagnostic.state==='error'){clearInterval(bootEnter);return;}
-        if(screen.graphical && screen.width===640 && screen.height===480 && screen.frames>2){
-          clearInterval(bootEnter);
-          emulator.keyboard_send_scancodes([0x0f,0x8f]);
-          setTimeout(()=>emulator.keyboard_send_text(' console=ttyS0 androidboot.console=ttyS0\n',5),500);
-        }
-      },1000);
     });
     setInterval(()=>{
       if(diagnostic.state==='error')return;
@@ -65,7 +57,8 @@ export async function start(){
       diagnostic.instructions=cpu?.instruction_counter?.[0];
       diagnostic.bootText=screen.get_text_screen().join('\n');
       diagnostic.console=guest.output.slice(-1500);
-      if(screen.graphical&&screen.width===800&&screen.frames>5&&diagnostic.state==='booting'){diagnostic.state='display-active';status('Android is starting…');}
+      diagnostic.input=guest.directTouch?'virtual touchscreen':'Android input command';
+      if(screen.graphical&&screen.width===480&&screen.height===960&&screen.frames>5&&diagnostic.state==='booting'){diagnostic.state='display-active';status('Android is starting…');}
       $('metrics').textContent=`${diagnostic.elapsedSeconds}s · ${screen.frames} frames · WebGPU`;
       $('diagnostics').textContent=JSON.stringify(diagnostic,null,2);
     },1000);
@@ -82,11 +75,13 @@ $('pause').onclick=async()=>{if(emulator.is_running()){await emulator.stop();$('
 $('fullscreen').onclick=()=>{const m=document.querySelector('.machine');if(m.requestFullscreen)m.requestFullscreen().catch(fail);else{m.scrollIntoView();status('Rotate your phone for a larger display');}};
 let pointer=null;
 function position(e){const r=$('screen').getBoundingClientRect();const scale=Math.min(r.width/screen.width,r.height/screen.height);const w=scale*screen.width,h=scale*screen.height;return[Math.max(0,Math.min(screen.width,(e.clientX-r.left-(r.width-w)/2)/scale)),Math.max(0,Math.min(screen.height,(e.clientY-r.top-(r.height-h)/2)/scale))];}
-$('screen').onpointerdown=e=>{if(!guest?.ready)return;e.preventDefault();$('screen').setPointerCapture(e.pointerId);const[x,y]=position(e);pointer={x,y,time:performance.now(),id:e.pointerId};};
+$('screen').onpointerdown=e=>{if(!guest?.ready||pointer)return;e.preventDefault();$('screen').setPointerCapture(e.pointerId);const[x,y]=position(e);pointer={x,y,time:performance.now(),lastMove:0,id:e.pointerId};guest.pointer('D',x,y);};
+$('screen').onpointermove=e=>{if(!pointer||e.pointerId!==pointer.id||!guest.directTouch)return;const now=performance.now();if(now-pointer.lastMove<33)return;pointer.lastMove=now;const[x,y]=position(e);guest.pointer('M',x,y);};
 $('screen').onpointerup=e=>{
   if(!pointer||e.pointerId!==pointer.id)return;
   const[x,y]=position(e),p=pointer;pointer=null;
+  if(guest.directTouch){guest.pointer('U',x,y);return;}
   const elapsed=performance.now()-p.time;
   if(Math.hypot(x-p.x,y-p.y)>6||elapsed>500)guest.swipe(p.x,p.y,x,y,elapsed);else guest.tap(x,y);
 };
-$('screen').onpointercancel=()=>{pointer=null;};
+$('screen').onpointercancel=()=>{if(pointer)guest.pointer('U',pointer.x,pointer.y);pointer=null;};
