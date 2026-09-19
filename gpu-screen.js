@@ -52,7 +52,6 @@ export class GPUScreen {
   set_size_graphical(w,h) {
     if (w===this.width && h===this.height) return;
     this.width=w; this.height=h; this.canvas.width=w; this.canvas.height=h;
-    this.canvas.parentElement.style.aspectRatio=`${w}/${h}`;
     this.texture?.destroy();
     this.texture=this.device.createTexture({size:[w,h],format:'rgba8unorm',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
     this.bind=this.device.createBindGroup({layout:this.pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:this.texture.createView()}]});
